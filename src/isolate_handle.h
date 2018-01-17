@@ -330,9 +330,9 @@ class IsolateHandle : public TransferableHandle {
 						compile_options = ScriptCompiler::kProduceCodeCache;
 					}
 					ScriptCompiler::Source source(code_inner, script_origin, cached_data.release());
-					script = std::make_shared<ShareablePersistent<UnboundScript>>(RunWithAnnotatedErrors<Local<UnboundScript>>(
-						[&isolate, &source, compile_options]() { return Unmaybe(ScriptCompiler::CompileUnboundScript(*isolate, &source, compile_options)); }
-					));
+					script = std::make_shared<ShareablePersistent<UnboundScript>>(
+						Unmaybe(ScriptCompiler::CompileUnboundScript(*isolate, &source, compile_options))
+					);
 
 					// Check cached data flags
 					if (cached_data_blob) {
