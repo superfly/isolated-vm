@@ -811,6 +811,44 @@ v8::Local<v8::Value> ThreePhaseRunner(ShareableIsolate& second_isolate, F1 fn1, 
 	}
 }
 
+class ThreePhaseTask {
+	private:
+		unique_ptr<ThreePhaseTask> self;
+		shared_ptr<ShareableIsolate> first_isolate;
+		shared_ptr<ShareableIsolate> second_isolate;
+
+	protected:
+		virtual void Phase1() = 0;
+		virtual void Phase2() = 0;
+		virtual v8::Local<v8::Value> Phase3() = 0;
+
+	public:
+		template <bool async, typename T, typename ...Args>
+		static v8::Local<v8::Value> Run(ShareableIsolate* second_isolate, Args&&... args) {
+			unique_ptr<ThreePhaseTask> self = std::make_unique<T>(std::forward<Args>(args)...);
+
+			if (async) {
+				assert(false);
+			} else {
+				// The sync case is a lot simpler, most of the work is done in second_isolate.Locker()
+				if (&ShareableIsolate::GetCurrent() == second_isolate) {
+					// Shortcut when calling a sync method belonging to the currently entered isolate. This isn't an
+					// optimization, it's used to bypass the deadlock prevention check in Locker()
+					self->Phase1();
+					self->Phase2();
+					return self->Phase3();
+				} else {
+					self->Phase1();
+					second_isolate->Locker([&self]() {
+						self->Phase2();
+						return 0;
+					});
+					return self->Phase3();
+				}
+			}
+		}
+};
+
 Local<Value> RunWithTimeout(uint32_t timeout_ms, ShareableIsolate& isolate, std::function<MaybeLocal<Value>()> fn);
 
 #pragma clang diagnostic push

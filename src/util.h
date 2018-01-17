@@ -58,13 +58,13 @@ T Unmaybe(v8::Maybe<T> handle) {
 /**
  * Run a function and annotate the exception with source / line number if it throws
  */
-template <typename T>
-T RunWithAnnotatedErrors(std::function<T()> fn) {
+template <typename T, typename F>
+T RunWithAnnotatedErrors(F fn) {
 	v8::Isolate* isolate = v8::Isolate::GetCurrent();
 	v8::TryCatch try_catch(isolate);
 	try {
 		return fn();
-	} catch (js_error_base& cc_error) {
+	} catch (const js_error_base& cc_error) {
 		try {
 			assert(try_catch.HasCaught());
 			v8::Local<v8::Context> context = isolate->GetCurrentContext();
@@ -81,7 +81,7 @@ T RunWithAnnotatedErrors(std::function<T()> fn) {
 			error.As<v8::Object>()->Set(v8_symbol("message"), v8_string((message_str + " [" + decorator + "]").c_str()));
 			isolate->ThrowException(error);
 			throw js_error_base();
-		} catch (js_error_base& cc_error) {
+		} catch (const js_error_base& cc_error) {
 			try_catch.ReThrow();
 			throw js_error_base();
 		}
