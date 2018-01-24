@@ -292,7 +292,7 @@ class ShareableIsolate : public std::enable_shared_from_this<ShareableIsolate> {
 			isolate->SetPromiseRejectCallback(PromiseRejectCallback);
 
 			// Bootstrap inspector
-			inspector_client = std::make_unique<InspectorClientImpl>(isolate, this);
+			//inspector_client = std::make_unique<InspectorClientImpl>(isolate, this);
 
 			// Create a default context for the library to use if needed
 			{
@@ -300,8 +300,8 @@ class ShareableIsolate : public std::enable_shared_from_this<ShareableIsolate> {
 				HandleScope handle_scope(isolate);
 				Local<Context> context = Context::New(isolate);
 				default_context.Reset(isolate, context);
-				std::string name = "default";
-				inspector_client->inspector->contextCreated(v8_inspector::V8ContextInfo(context, 1, v8_inspector::StringView((const uint8_t*)name.c_str(), name.length())));
+				//std::string name = "default";
+				//inspector_client->inspector->contextCreated(v8_inspector::V8ContextInfo(context, 1, v8_inspector::StringView((const uint8_t*)name.c_str(), name.length())));
 			}
 
 			// There is no asynchronous Isolate ctor so we should throw away thread specifics in case
@@ -395,7 +395,7 @@ class ShareableIsolate : public std::enable_shared_from_this<ShareableIsolate> {
 				assert(tasks.empty());
 				LockerHelper locker(*this);
 				// Dispose of inspector first
-				inspector_client.reset();
+				//inspector_client.reset();
 				// Flush tasks
 				ExecuteHandleTasks();
 				assert(handle_tasks.empty());
@@ -683,14 +683,18 @@ class ShareableIsolate : public std::enable_shared_from_this<ShareableIsolate> {
 		}
 
 		void ContextCreated(Local<Context> context) {
+			/*
 			std::string name = "<isolated-vm>";
 			inspector_client->inspector->contextCreated(v8_inspector::V8ContextInfo(context, 1, v8_inspector::StringView((const uint8_t*)name.c_str(), name.length())));
+			*/
 		}
 
 		void ContextDestroyed(Local<Context> context) {
+			/*
 			if (!root) { // TODO: This gets called for the root context because of ShareableContext's dtor :(
 				inspector_client->inspector->contextDestroyed(context);
 			}
+			*/
 		}
 
 		/**
