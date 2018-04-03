@@ -132,7 +132,7 @@ uv_async_t IsolateEnvironment::Scheduler::root_async;
 thread_pool_t IsolateEnvironment::Scheduler::thread_pool(std::thread::hardware_concurrency() + 1);
 std::atomic<unsigned int> IsolateEnvironment::Scheduler::uv_ref_count(0);
 
-IsolateEnvironment::Scheduler::Scheduler() = default;
+IsolateEnvironment::Scheduler::Scheduler(bool default_isolate) : default_isolate(default_isolate) {}
 IsolateEnvironment::Scheduler::~Scheduler() = default;
 
 void IsolateEnvironment::Scheduler::Init() {
@@ -144,11 +144,14 @@ void IsolateEnvironment::Scheduler::Init() {
 void IsolateEnvironment::Scheduler::AsyncCallbackRoot(uv_async_t* async) {
 	if (async->data == nullptr) {
 		// This is the final message
+		fprintf(stderr, "isolated-vm: %p got terminal ping\n", std::this_thread::get_id());
 		return;
 	}
+	fprintf(stderr, "isolated-vm: %p begin root callback\n", std::this_thread::get_id());
 	void* data = async->data;
 	async->data = nullptr;
 	AsyncCallbackPool(true, data);
+	fprintf(stderr, "isolated-vm: %p end root callback\n", std::this_thread::get_id());
 }
 
 void IsolateEnvironment::Scheduler::AsyncCallbackPool(bool pool_thread, void* param) {
@@ -176,6 +179,7 @@ void IsolateEnvironment::Scheduler::AsyncCallbackPool(bool pool_thread, void* pa
 		// For some reason sending a pointless ping to the unref'd uv handle allows node to quit when
 		// isolated-vm is done.
 		assert(root_async.data == nullptr);
+		fprintf(stderr, "isolated-vm: %p send terminal ping\n", std::this_thread::get_id());
 		uv_async_send(&root_async);
 	}
 }
@@ -194,6 +198,9 @@ IsolateEnvironment::Scheduler::Lock::Lock(Scheduler& scheduler) : scheduler(sche
 IsolateEnvironment::Scheduler::Lock::~Lock() = default;
 
 void IsolateEnvironment::Scheduler::Lock::DoneRunning() {
+	if (scheduler.default_isolate) {
+		fprintf(stderr, "isolated-vm: %p done running\n", std::this_thread::get_id());
+	}
 	assert(scheduler.status == Status::Running);
 	scheduler.status = Status::Waiting;
 }
@@ -229,6 +236,9 @@ std::queue<unique_ptr<Runnable>> IsolateEnvironment::Scheduler::Lock::TakeSyncIn
 }
 
 bool IsolateEnvironment::Scheduler::Lock::WakeIsolate(shared_ptr<IsolateEnvironment> isolate_ptr) {
+	if (isolate_ptr->root != scheduler.default_isolate) {
+		fprintf(stderr, "isolated-vm: %p default isolate mismatch!\n", std::this_thread::get_id());
+	}
 	if (scheduler.status == Status::Waiting) {
 		scheduler.status = Status::Running;
 		IsolateEnvironment& isolate = *isolate_ptr;
@@ -241,12 +251,20 @@ bool IsolateEnvironment::Scheduler::Lock::WakeIsolate(shared_ptr<IsolateEnvironm
 		if (isolate.root) {
 			assert(root_async.data == nullptr);
 			root_async.data = isolate_ptr_ptr;
+			fprintf(stderr, "isolated-vm: %p send uv async\n", std::this_thread::get_id());
 			uv_async_send(&root_async);
 		} else {
 			thread_pool.exec(scheduler.thread_affinity, Scheduler::AsyncCallbackPool, isolate_ptr_ptr);
 		}
 		return true;
 	} else {
+		if (isolate_ptr->root) {
+			if (scheduler.tasks.size() == 10) {
+				fprintf(stderr, "isolated-vm: %p skipping uv async, tasks>10\n", std::this_thread::get_id());
+			} else if (scheduler.tasks.size() < 10) {
+				fprintf(stderr, "isolated-vm: %p skipping uv async, tasks=%lu\n", std::this_thread::get_id(), scheduler.tasks.size());
+			}
+		}
 		return false;
 	}
 }
@@ -410,6 +428,9 @@ void IsolateEnvironment::AsyncEntry() {
 			// Grab current tasks
 			Scheduler::Lock lock(scheduler);
 			tasks = lock.TakeTasks();
+			if (root) {
+				fprintf(stderr, "isolated-vm: %p acquired tasks=%lu\n", std::this_thread::get_id(), tasks.size());
+			}
 			interrupts = lock.TakeInterrupts();
 			if (tasks.empty() && interrupts.empty()) {
 				lock.DoneRunning();
@@ -458,6 +479,7 @@ void IsolateEnvironment::InterruptEntry() {
 
 IsolateEnvironment::IsolateEnvironment(Isolate* isolate, Local<Context> context) :
 	isolate(isolate),
+	scheduler(true),
 	executor(*this),
 	default_context(isolate, context),
 	root(true),
@@ -473,6 +495,7 @@ IsolateEnvironment::IsolateEnvironment(
 	shared_ptr<void> snapshot_blob,
 	size_t snapshot_length
 ) :
+	scheduler(false),
 	executor(*this),
 	allocator_ptr(std::make_unique<LimitedAllocator>(*this, memory_limit * 1024 * 1024)),
 	snapshot_blob_ptr(std::move(snapshot_blob)),
