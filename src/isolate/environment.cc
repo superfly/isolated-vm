@@ -144,14 +144,14 @@ void IsolateEnvironment::Scheduler::Init() {
 void IsolateEnvironment::Scheduler::AsyncCallbackRoot(uv_async_t* async) {
 	if (async->data == nullptr) {
 		// This is the final message
-		fprintf(stderr, "isolated-vm: %p got terminal ping\n", std::this_thread::get_id());
+		// fprintf(stderr, "isolated-vm: %p got terminal ping\n", std::this_thread::get_id());
 		return;
 	}
-	fprintf(stderr, "isolated-vm: %p begin root callback\n", std::this_thread::get_id());
+	// fprintf(stderr, "isolated-vm: %p begin root callback\n", std::this_thread::get_id());
 	void* data = async->data;
 	async->data = nullptr;
 	AsyncCallbackPool(true, data);
-	fprintf(stderr, "isolated-vm: %p end root callback\n", std::this_thread::get_id());
+	// fprintf(stderr, "isolated-vm: %p end root callback\n", std::this_thread::get_id());
 }
 
 void IsolateEnvironment::Scheduler::AsyncCallbackPool(bool pool_thread, void* param) {
@@ -179,7 +179,7 @@ void IsolateEnvironment::Scheduler::AsyncCallbackPool(bool pool_thread, void* pa
 		// For some reason sending a pointless ping to the unref'd uv handle allows node to quit when
 		// isolated-vm is done.
 		assert(root_async.data == nullptr);
-		fprintf(stderr, "isolated-vm: %p send terminal ping\n", std::this_thread::get_id());
+		// fprintf(stderr, "isolated-vm: %p send terminal ping\n", std::this_thread::get_id());
 		uv_async_send(&root_async);
 	}
 }
@@ -199,7 +199,7 @@ IsolateEnvironment::Scheduler::Lock::~Lock() = default;
 
 void IsolateEnvironment::Scheduler::Lock::DoneRunning() {
 	if (scheduler.default_isolate) {
-		fprintf(stderr, "isolated-vm: %p done running\n", std::this_thread::get_id());
+		// fprintf(stderr, "isolated-vm: %p done running\n", std::this_thread::get_id());
 	}
 	assert(scheduler.status == Status::Running);
 	scheduler.status = Status::Waiting;
@@ -251,7 +251,7 @@ bool IsolateEnvironment::Scheduler::Lock::WakeIsolate(shared_ptr<IsolateEnvironm
 		if (isolate.root) {
 			assert(root_async.data == nullptr);
 			root_async.data = isolate_ptr_ptr;
-			fprintf(stderr, "isolated-vm: %p send uv async\n", std::this_thread::get_id());
+			// fprintf(stderr, "isolated-vm: %p send uv async\n", std::this_thread::get_id());
 			uv_async_send(&root_async);
 		} else {
 			thread_pool.exec(scheduler.thread_affinity, Scheduler::AsyncCallbackPool, isolate_ptr_ptr);
@@ -260,9 +260,9 @@ bool IsolateEnvironment::Scheduler::Lock::WakeIsolate(shared_ptr<IsolateEnvironm
 	} else {
 		if (isolate_ptr->root) {
 			if (scheduler.tasks.size() == 10) {
-				fprintf(stderr, "isolated-vm: %p skipping uv async, tasks>10\n", std::this_thread::get_id());
+				// fprintf(stderr, "isolated-vm: %p skipping uv async, tasks>10\n", std::this_thread::get_id());
 			} else if (scheduler.tasks.size() < 10) {
-				fprintf(stderr, "isolated-vm: %p skipping uv async, tasks=%lu\n", std::this_thread::get_id(), scheduler.tasks.size());
+				// fprintf(stderr, "isolated-vm: %p skipping uv async, tasks=%lu\n", std::this_thread::get_id(), scheduler.tasks.size());
 			}
 		}
 		return false;
@@ -429,7 +429,7 @@ void IsolateEnvironment::AsyncEntry() {
 			Scheduler::Lock lock(scheduler);
 			tasks = lock.TakeTasks();
 			if (root) {
-				fprintf(stderr, "isolated-vm: %p acquired tasks=%lu\n", std::this_thread::get_id(), tasks.size());
+				// fprintf(stderr, "isolated-vm: %p acquired tasks=%lu\n", std::this_thread::get_id(), tasks.size());
 			}
 			interrupts = lock.TakeInterrupts();
 			if (tasks.empty() && interrupts.empty()) {
